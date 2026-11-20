@@ -132,7 +132,7 @@ public struct ProviderDetailView: View {
     private var apiKeySection: some View {
         AppSettingSection(title: pluginLocalization.string("API 密钥")) {
             VStack(spacing: 0) {
-                AppSettingRow(
+                ProviderDetailSettingRow(
                     title: "API Key",
                     description: pluginLocalization.string("配置访问凭证"),
                     icon: "key"
@@ -154,7 +154,7 @@ public struct ProviderDetailView: View {
                 Divider()
                     .padding(.vertical, 8)
 
-                AppSettingRow(
+                ProviderDetailSettingRow(
                     title: pluginLocalization.string("操作"),
                     description: pluginLocalization.string(
                         viewModel.savedAPIKey.isEmpty ? "尚未保存 API Key" : "已保存 API Key"
@@ -294,5 +294,76 @@ public struct ProviderDetailView: View {
             return "\(tokens / 1_000)K"
         }
         return "\(tokens)"
+    }
+}
+
+@MainActor
+private struct ProviderDetailSettingRow<Content: View>: View {
+    let title: String
+    let description: String?
+    let icon: String?
+    let content: Content
+    @State private var availableWidth: CGFloat = 0
+
+    init(
+        title: String,
+        description: String? = nil,
+        icon: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.description = description
+        self.icon = icon
+        self.content = content()
+    }
+
+    var body: some View {
+        Group {
+            if availableWidth < 520 {
+                compactRow
+            } else {
+                AppSettingRow(title: title, description: description, icon: icon) {
+                    content
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { availableWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, newWidth in
+                        availableWidth = newWidth
+                    }
+            }
+        }
+    }
+
+    private var compactRow: some View {
+        // 960pt 设置窗口容纳不下完整横排时，把行尾控件移到说明文字下方。
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.body)
+                    if let description {
+                        Text(description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            content
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
     }
 }
