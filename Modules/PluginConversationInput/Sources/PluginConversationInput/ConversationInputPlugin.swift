@@ -31,6 +31,7 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
     private var sendActionBarViewModel: SendActionBarViewModel?
     private var missingActionBarProviders: [String] = []
     private var inputObserver: ConversationInputObserver?
+    private var editSessionObserver: EditSessionObserver?
     private var actionBarInputObserver: ActionBarInputObserver?
     private var actionBarConversationObserver: ActionBarConversationObserver?
     private var sendActionBarStateObserver: SendActionBarConversationObserver?
@@ -53,6 +54,8 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
         let sender = kernel.resolveProvider((any MessageSendingProviding).self)
         let conversations = kernel.resolveProvider((any ConversationManaging).self)
         let conversationState = kernel.resolveProvider((any ConversationStateProviding).self)
+        // 编辑能力是可选依赖：缺失时输入框照常收发，只是没有编辑模式。
+        let editing = kernel.resolveProvider((any MessageEditingProviding).self)
 
         // 组装层：Capability → ViewModel → Observer → View。
         let capability = ConversationInputCapabilityAdapter(
@@ -60,7 +63,8 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
             blocks: blocks,
             sender: sender,
             conversations: conversations,
-            conversationState: conversationState
+            conversationState: conversationState,
+            editing: editing
         )
         self.capability = capability
 
@@ -69,6 +73,12 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
 
         inputObserver?.cancel()
         inputObserver = ConversationInputObserver(
+            capability: capability,
+            viewModel: inputViewModel
+        )
+
+        editSessionObserver?.cancel()
+        editSessionObserver = EditSessionObserver(
             capability: capability,
             viewModel: inputViewModel
         )
@@ -89,6 +99,10 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
         let actionBar = sendActionBarViewModel
         inputViewModel.onTextWritten = { [weak actionBar] text in
             actionBar?.updateInputText(text)
+        }
+        // 编辑模式下按钮只负责转交，编辑路径由输入框 ViewModel 独占。
+        sendActionBarViewModel?.onEditSubmit = { [weak inputViewModel] in
+            inputViewModel?.send()
         }
         missingActionBarProviders = missingProviders
         let actionBarViewModel = sendActionBarViewModel
@@ -176,6 +190,8 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
     public func onShutdown(kernel: KernelCoreContainer) throws {
         inputObserver?.cancel()
         inputObserver = nil
+        editSessionObserver?.cancel()
+        editSessionObserver = nil
         actionBarInputObserver?.cancel()
         actionBarInputObserver = nil
         sendActionBarStateObserver?.cancel()

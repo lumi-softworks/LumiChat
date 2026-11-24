@@ -69,6 +69,7 @@ let package = Package(
                 .product(name: "ProviderMessage", package: "LumiProviderMessage"),
                 .product(name: "ProviderMessageSender", package: "LumiProviderMessageSender"),
                 .product(name: "LumiLoggingKit", package: "LumiLogging"),
+                "PluginMessageSender",
             ],
             path: "Modules/PluginConversationInput/Sources/PluginConversationInput",
             resources: [.process("../../Resources/Localizable.xcstrings")]
@@ -440,6 +441,7 @@ let package = Package(
             name: "PluginConversationInputTests",
             dependencies: [
                 "PluginConversationInput",
+                "PluginMessageSender",
                 .product(name: "ProviderAgentLoop", package: "LumiProviderAgentLoop"),
                 .product(name: "ProviderConversation", package: "LumiProviders"),
                 .product(name: "ProviderConversationInput", package: "LumiProviders"),

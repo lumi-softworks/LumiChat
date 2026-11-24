@@ -4,6 +4,17 @@ import os
 import ProviderMessage
 import SwiftUI
 
+/// 下发到编辑器的正文里要还原成 chip 的折叠块。
+public struct EditorChipRestoration: Equatable {
+    public let text: String
+    public let blocks: [CollapsedContentBlock]
+
+    public init(text: String, blocks: [CollapsedContentBlock]) {
+        self.text = text
+        self.blocks = blocks
+    }
+}
+
 #if DEBUG
 private let chatInputPerformanceLog = OSLog(
     subsystem: "com.coffic.lumi",
@@ -47,6 +58,10 @@ public struct ChatInputEditorView: NSViewRepresentable {
     /// 待插入输入框的折叠块请求（如编辑器选区发送到对话）。
     /// 消费一次后由 ViewModel 置空，避免重复插入同一个 chip。
     private let pendingBlock: ConversationInputBlockRequest?
+    /// 下发到编辑器的正文里要还原成 chip 的折叠块（编辑已发送消息时的预填）。
+    ///
+    /// 只有当下发的正文与 `text` 完全一致时才生效，过期的恢复请求不会误伤之后输入的内容。
+    private let chipRestoration: EditorChipRestoration?
 
     public init(
         text: Binding<String>,
@@ -68,7 +83,8 @@ public struct ChatInputEditorView: NSViewRepresentable {
         isFocused: Binding<Bool>,
         cursorPosition: Binding<Int>,
         isImageDragHovering: Binding<Bool>,
-        pendingBlock: ConversationInputBlockRequest? = nil
+        pendingBlock: ConversationInputBlockRequest? = nil,
+        chipRestoration: EditorChipRestoration? = nil
     ) {
         self._text = text
         self._height = height
@@ -90,6 +106,7 @@ public struct ChatInputEditorView: NSViewRepresentable {
         self.onBlockInserted = onBlockInserted
         self.onCollapsedBlocksChanged = onCollapsedBlocksChanged
         self.pendingBlock = pendingBlock
+        self.chipRestoration = chipRestoration
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -148,10 +165,7 @@ public struct ChatInputEditorView: NSViewRepresentable {
         // 而协调器的 lastSyncedBindingText 为 nil，首次 updateNSView 会把空串误判成
         // 「编辑器侧 binding 不知情的新内容」回写 binding，静默清空用户未发送的
         // 草稿——隐藏再恢复聊天区（终端/数据库等）就会触发这条路径（#601）。
-        textView.delegate = nil
-        textView.string = text
-        textView.delegate = context.coordinator
-        context.coordinator.noteBindingTextPushedDown(text)
+        applyRestoredChipsIfNeeded(in: textView, pushedText: text, coordinator: context.coordinator)
 
         scrollView.documentView = textView
         context.coordinator.attach(to: textView)
@@ -235,14 +249,7 @@ public struct ChatInputEditorView: NSViewRepresentable {
         }
 
         if textChanged {
-            textView.delegate = nil
-            textView.hasPastePreviewAttachments = false
-            textView.string = text
-            textView.delegate = context.coordinator
-            context.coordinator.noteBindingTextPushedDown(text)
-            // 纯文本写回编辑器后，chip 已不存在，区间必须一并清空，
-            // 否则发送时会带着早已不存在的区间落库。
-            reportCollapsedBlocks([])
+            applyRestoredChipsIfNeeded(in: textView, pushedText: text, coordinator: context.coordinator)
         }
 
         updatePlaceholder(for: textView)
@@ -259,6 +266,77 @@ public struct ChatInputEditorView: NSViewRepresentable {
         }
 
         insertPendingBlockIfNeeded(in: textView, context: context)
+    }
+
+    /// 把 binding 的正文写回编辑器；有匹配的恢复请求时按折叠块还原成 chip。
+    private func applyRestoredChipsIfNeeded(
+        in textView: EditorTextView,
+        pushedText: String,
+        coordinator: Coordinator
+    ) {
+        let restoredBlocks = chipRestoration?.text == pushedText ? chipRestoration?.blocks ?? [] : []
+        textView.delegate = nil
+        textView.hasPastePreviewAttachments = false
+        if restoredBlocks.isEmpty {
+            textView.string = pushedText
+        } else {
+            textView.textStorage?.setAttributedString(Self.attributedContent(
+                text: pushedText,
+                blocks: restoredBlocks,
+                font: font,
+                palette: chipPalette
+            ))
+            textView.hasPastePreviewAttachments = true
+            textView.syncPasteHoverTracking()
+        }
+        textView.delegate = coordinator
+        coordinator.noteBindingTextPushedDown(pushedText)
+        // 纯文本写回编辑器后 chip 已不存在，区间必须一并清空，否则发送时会带着
+        // 早已不存在的区间落库；还原了 chip 则上报还原后的区间。
+        reportCollapsedBlocks(restoredBlocks)
+    }
+
+    /// 按折叠块区间把正文拼成带 chip 的富文本。
+    ///
+    /// 区间以正文的 Character 偏移为准；越界、重叠或零长度的块按纯文本保留。
+    static func attributedContent(
+        text: String,
+        blocks: [CollapsedContentBlock],
+        font: NSFont,
+        palette: PasteChipPalette
+    ) -> NSAttributedString {
+        var cursor = 0
+        let ordered = blocks
+            .filter { $0.length > 0 }
+            .sorted { $0.start < $1.start }
+            .filter { block in
+                guard block.start >= cursor else { return false }
+                cursor = block.start + block.length
+                return true
+            }
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let result = NSMutableAttributedString()
+        cursor = 0
+        for block in ordered {
+            guard let range = Range(NSRange(location: block.start, length: block.length), in: text),
+                  let cursorIndex = text.index(text.startIndex, offsetBy: cursor, limitedBy: text.endIndex),
+                  cursorIndex <= range.lowerBound else { continue }
+            result.append(NSAttributedString(
+                string: String(text[cursorIndex..<range.lowerBound]),
+                attributes: attributes
+            ))
+            result.append(NSAttributedString(attachment: PastePreviewAttachment(
+                originalText: String(text[range]),
+                title: block.title,
+                systemImage: block.systemImage,
+                font: font,
+                palette: palette
+            )))
+            cursor = block.start + block.length
+        }
+        let tailStart = text.index(text.startIndex, offsetBy: cursor, limitedBy: text.endIndex) ?? text.endIndex
+        result.append(NSAttributedString(string: String(text[tailStart...]), attributes: attributes))
+        return result
     }
 
     /// 把外部递交的折叠块插进编辑器。

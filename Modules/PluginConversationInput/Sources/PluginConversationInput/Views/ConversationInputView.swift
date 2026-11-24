@@ -37,6 +37,11 @@ struct ConversationInputView: View {
                 .padding(.bottom, 4)
             }
 
+            if viewModel.editSession != nil {
+                EditSessionBanner(onCancel: { viewModel.cancelEditing() })
+                    .padding(.bottom, 4)
+            }
+
             ComposerView(
                 viewModel: viewModel,
                 onSend: { viewModel.send() }

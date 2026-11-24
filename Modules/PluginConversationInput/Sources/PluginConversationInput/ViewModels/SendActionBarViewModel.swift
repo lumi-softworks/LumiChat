@@ -17,7 +17,10 @@ final class SendActionBarViewModel: ObservableObject, SuperLog {
 
     private let capability: any ConversationInputCapability
     /// 是否已经在等待在途附件读取。避免重复点击排起多条发送链。
-    private var isWaitingForAttachmentReads = false
+/// 编辑模式下的发送转交目标，由插件接到输入框 ViewModel 的 `send()`。
+    var onEditSubmit: (() -> Void)?
+
+        private var isWaitingForAttachmentReads = false
 
     @Published private(set) var state: SendActionBarState
 
@@ -94,6 +97,13 @@ final class SendActionBarViewModel: ObservableObject, SuperLog {
         // 提交中的草稿还在输入框里，此时再次触发会把同一条正文（或同一批
         // 附件）当成新消息重复提交。标记由两条发送入口共用。
         guard !capability.isCommittingDraft else { return }
+
+        // 编辑模式下的提交只由输入框 ViewModel 负责：它持有编辑会话、暂存的
+        // 编辑前草稿与失败重试状态，这里直接转交，避免两处各写一遍编辑路径。
+        if capability.editSession != nil {
+            onEditSubmit?()
+            return
+        }
 
         // 在按下 Send 的瞬间快照正文与折叠块。附件异步读取期间用户可能继续
         // 编辑，发出去的必须是按下 Send 时的那一份草稿，而不是读取结束后

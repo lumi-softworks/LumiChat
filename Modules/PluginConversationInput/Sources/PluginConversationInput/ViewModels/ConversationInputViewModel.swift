@@ -31,6 +31,13 @@ final class ConversationInputViewModel: ObservableObject, SuperLog {
     @Published private(set) var imageAttachments: [UserImageAttachment] = []
     @Published private(set) var fileAttachments: [UserFileAttachment] = []
     @Published private(set) var canSend = false
+    /// 进行中的编辑会话：输入框里是被编辑消息的草稿，发送时改走 `submitEdit`。
+    @Published private(set) var editSession: MessageEditSession?
+    /// 下发到编辑器的正文里要还原成 chip 的折叠块。
+    ///
+    /// 绑定正文被程序改写时，编辑器只会按纯文本重写自己；没有它，编辑带折叠块的消息
+    /// 或取消编辑恢复草稿时，chip 都会展开成一大段原文。
+    private(set) var chipRestoration: EditorChipRestoration?
     /// 待插入编辑器的折叠块。生产方递交后由编辑器消费（插入 chip），
     /// 消费完成后清空，避免同一个块被重复插入。
     ///
@@ -184,6 +191,10 @@ final class ConversationInputViewModel: ObservableObject, SuperLog {
             let current = self.capability.selectedConversationID
             guard current != self.draftConversationID else { return }
             self.draftConversationID = current
+            // 离开正在编辑的会话：先结束编辑并恢复编辑前的草稿，再做常规清空，
+            // 否则被编辑消息的正文会留在这里，看起来像一份未发送的草稿。
+            self.capability.cancelEditing()
+            self.chipRestoration = nil
             self.capability.clearInput()
             self.capability.clearAttachments()
             // 未消费的折叠块同样属于旧草稿：归属别的对话的块一律丢弃，
@@ -313,6 +324,7 @@ final class ConversationInputViewModel: ObservableObject, SuperLog {
         // 同时锁定按下 Send 时选中的会话：等待期间用户可能切换会话，提交必须
         // 仍落在发起发送的那个会话，绝不能把新会话的独立草稿当成这次发送（#1173）。
         let conversationID = capability.selectedConversationID
+        let session = editSession
 
         // 附件还在异步读取：等读取结束再提交，否则这条消息会漏掉用户刚选中
         // 的附件，附件又滚进下一条无关消息（#1023）。
@@ -328,12 +340,143 @@ final class ConversationInputViewModel: ObservableObject, SuperLog {
                     refresh()
                     return
                 }
-                performSend(content: content, blocks: blocks, conversationID: conversationID)
+                dispatchSend(content: content, blocks: blocks, conversationID: conversationID, session: session)
             }
             return
         }
 
-        performSend(content: content, blocks: blocks, conversationID: conversationID)
+        dispatchSend(content: content, blocks: blocks, conversationID: conversationID, session: session)
+    }
+
+    /// 编辑模式下走编辑提交，否则走普通发送。
+    private func dispatchSend(
+        content: String,
+        blocks: [CollapsedContentBlock],
+        conversationID: UUID?,
+        session: MessageEditSession?
+    ) {
+        if let session {
+            performEditSubmit(session, content: content, blocks: blocks)
+        } else {
+            performSend(content: content, blocks: blocks, conversationID: conversationID)
+        }
+    }
+
+    /// 把输入框里的草稿作为对 `session.draft` 的编辑提交：截断旧消息并作为新回合发出。
+    private func performEditSubmit(
+        _ session: MessageEditSession,
+        content: String,
+        blocks: [CollapsedContentBlock]
+    ) {
+        let imageAttachments = capability.pendingImageAttachments
+        let fileAttachments = capability.pendingFileAttachments
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasAttachments = !imageAttachments.isEmpty || !fileAttachments.isEmpty
+        guard !trimmed.isEmpty || hasAttachments else { return }
+
+        capability.errorMessage = nil
+        // 附件必须在提交瞬间离开挂起池：等待回合停下的窗口里再次触发发送，
+        // 否则会把同一批附件重复提交。
+        capability.clearAttachments()
+        capability.isCommittingDraft = true
+        refresh()
+
+        Task { @MainActor in
+            let draft = MessageEditDraft(
+                targetMessageID: session.draft.targetMessageID,
+                conversationID: session.draft.conversationID,
+                content: content,
+                imageAttachments: imageAttachments,
+                fileAttachments: fileAttachments,
+                collapsedBlocks: blocks
+            )
+            do {
+                let commit = try await capability.submitEdit(draft)
+                // 提交结束即释放门禁；后面的回合跟踪不能继续挡住发送。
+                capability.isCommittingDraft = false
+                // 编辑器在提交成功时发布 `.ended`，编辑前的草稿已经恢复，
+                // 因此这里不清空输入框。
+                guard !commit.wasQueued else { return }
+                await capability.startTurn(for: commit)
+            } catch {
+                capability.isCommittingDraft = false
+                // 编辑会话保留：正文仍在输入框里，附件放回挂起池，用户可以直接重试。
+                imageAttachments.forEach(capability.addImageAttachment)
+                fileAttachments.forEach(capability.addFileAttachment)
+                capability.errorMessage = MessageEditFailureMessage.text(for: error)
+                refresh()
+            }
+        }
+    }
+
+    // MARK: - 编辑会话
+
+    /// 把编辑 Provider 的生命周期事件落到输入框。
+    func handleEditingEvent(_ event: MessageEditingEvent) {
+        switch event {
+        case .began(let draft):
+            beginEditingSession(draft)
+        case .ended(let conversationID):
+            endEditingSession(in: conversationID)
+        }
+    }
+
+    /// 用户点击「取消」：结束编辑，不动时间线。
+    func cancelEditing() {
+        capability.cancelEditing()
+    }
+
+    private func beginEditingSession(_ draft: MessageEditDraft) {
+        let session = MessageEditSession(
+            draft: draft,
+            stashedText: capability.text,
+            stashedImageAttachments: capability.pendingImageAttachments,
+            stashedFileAttachments: capability.pendingFileAttachments,
+            stashedCollapsedBlocks: capability.collapsedBlocks
+        )
+        editSession = session
+        capability.editSession = session
+        capability.errorMessage = nil
+        capability.clearAttachments()
+        presentDraft(
+            text: draft.content,
+            blocks: draft.collapsedBlocks,
+            images: draft.imageAttachments,
+            files: draft.fileAttachments
+        )
+        // 光标落在末尾：编辑器把 binding 光标位映射到富文本时会落在文末。
+        capability.inputCursorPosition = draft.content.count
+        capability.isInputFocused = true
+    }
+
+    private func endEditingSession(in conversationID: UUID) {
+        guard let session = editSession, session.draft.conversationID == conversationID else { return }
+        editSession = nil
+        capability.editSession = nil
+        presentDraft(
+            text: session.stashedText,
+            blocks: session.stashedCollapsedBlocks,
+            images: session.stashedImageAttachments,
+            files: session.stashedFileAttachments
+        )
+    }
+
+    /// 用一份完整草稿（正文、折叠块、附件）替换输入框当前内容。
+    private func presentDraft(
+        text: String,
+        blocks: [CollapsedContentBlock],
+        images: [UserImageAttachment],
+        files: [UserFileAttachment]
+    ) {
+        // 折叠块先于正文写入：正文一变，编辑器就会按纯文本重写并清空区间，
+        // 随后才靠 chipRestoration 把 chip 还原回来。
+        capability.collapsedBlocks = blocks
+        capability.clearAttachments()
+        chipRestoration = blocks.isEmpty ? nil : EditorChipRestoration(text: text, blocks: blocks)
+        setText(text)
+        images.forEach(capability.addImageAttachment)
+        files.forEach(capability.addFileAttachment)
+        refresh()
     }
 
     /// 用按下 Send 时快照的正文、折叠块与目标会话执行提交。

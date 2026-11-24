@@ -1,4 +1,5 @@
 import Foundation
+import PluginMessageSender
 import ProviderConversation
 import ProviderConversationInput
 import ProviderConversationInputBlock
@@ -80,6 +81,19 @@ protocol ConversationInputCapability: AnyObject {
 
     func cancelCurrentRequest()
 
+    // MARK: - Editing
+
+    /// 进行中的编辑会话。由输入框 ViewModel 维护；发送按钮据此改走编辑提交路径。
+    var editSession: MessageEditSession? { get set }
+    @discardableResult
+    func addEditingObserver(
+        _ callback: @escaping (MessageEditingEvent) -> Void
+    ) -> any MessageEditingObserverHandle
+    /// 截断被编辑的消息及其之后的全部消息，再把草稿作为新回合发出。
+    func submitEdit(_ draft: MessageEditDraft) async throws -> MessageSendCommit
+    /// 结束编辑会话，不改动时间线。
+    func cancelEditing()
+
     // MARK: - Conversation / sending state
 
     var selectedConversationID: UUID? { get }
@@ -131,23 +145,27 @@ final class ConversationInputCapabilityAdapter: ConversationInputCapability {
     private let sender: (any MessageSendingProviding)?
     private let conversations: (any ConversationManaging)?
     private let conversationState: (any ConversationStateProviding)?
+    private let editing: (any MessageEditingProviding)?
     /// 草稿里的折叠块区间。草稿级状态，随正文一起清空。
     private var storedCollapsedBlocks: [CollapsedContentBlock] = []
     /// 草稿提交中标记。两条发送入口共用，见协议声明。
     private var storedIsCommittingDraft = false
+    private var storedEditSession: MessageEditSession?
 
     init(
         input: (any ConversationInputProviding)?,
         blocks: (any ConversationInputBlockProviding)? = nil,
         sender: (any MessageSendingProviding)?,
         conversations: (any ConversationManaging)?,
-        conversationState: (any ConversationStateProviding)?
+        conversationState: (any ConversationStateProviding)?,
+        editing: (any MessageEditingProviding)? = nil
     ) {
         self.input = input
         self.blocks = blocks
         self.sender = sender
         self.conversations = conversations
         self.conversationState = conversationState
+        self.editing = editing
     }
 
     // MARK: - Input
@@ -289,6 +307,29 @@ final class ConversationInputCapabilityAdapter: ConversationInputCapability {
         sender?.cancelCurrentRequest()
     }
 
+    // MARK: - Editing
+
+    var editSession: MessageEditSession? {
+        get { storedEditSession }
+        set { storedEditSession = newValue }
+    }
+
+    func addEditingObserver(
+        _ callback: @escaping (MessageEditingEvent) -> Void
+    ) -> any MessageEditingObserverHandle {
+        editing?.addObserver(callback) ?? NoopMessageEditingObserverHandle()
+    }
+
+    func submitEdit(_ draft: MessageEditDraft) async throws -> MessageSendCommit {
+        guard let editing else { throw MessageEditError.noActiveEdit }
+        return try await editing.submitEdit(draft)
+    }
+
+    func cancelEditing() {
+        guard let session = storedEditSession else { return }
+        editing?.cancelEditing(in: session.draft.conversationID)
+    }
+
     // MARK: - Conversation / sending state
 
     var selectedConversationID: UUID? {
@@ -351,5 +392,9 @@ private final class NoopTextInputObserverHandle: TextInputObserverHandle {
 }
 
 private final class NoopMessageSenderObserverHandle: MessageSenderObserverHandle {
+    func cancel() {}
+}
+
+private final class NoopMessageEditingObserverHandle: MessageEditingObserverHandle {
     func cancel() {}
 }

@@ -61,7 +61,8 @@ struct ComposerView: View {
             isFocused: focusedBinding,
             cursorPosition: cursorBinding,
             isImageDragHovering: .constant(false),
-            pendingBlock: viewModel.pendingBlock
+            pendingBlock: viewModel.pendingBlock,
+            chipRestoration: viewModel.chipRestoration
         )
         .frame(height: viewModel.inputHeight)
         .composerContentInsets()

@@ -498,6 +498,8 @@ final class SendActionBarTestCapability: ConversationInputCapability {
     private(set) var startedCommits: [MessageSendCommit] = []
     private(set) var cancelCount = 0
     private(set) var clearInputCount = 0
+    private(set) var submittedEdits: [MessageEditDraft] = []
+    private(set) var cancelEditingCount = 0
     private(set) var clearedAttachments = false
 
     /// 同步与后台提交共用的返回值 / 错误。
@@ -528,6 +530,13 @@ final class SendActionBarTestCapability: ConversationInputCapability {
     var collapsedBlocks: [CollapsedContentBlock] = []
     /// 草稿提交中标记，两条发送入口共用。
     var isCommittingDraft = false
+    var editSession: MessageEditSession?
+    /// `submitEdit` 的返回值或抛出的错误；两者都为 nil 时返回一个已入队的提交。
+    var editCommit: MessageSendCommit?
+    var editError: (any Error)?
+    /// 挂起 `submitEdit`，模拟等待回合停下的窗口；调用 `releaseEditSubmits()` 放行。
+    var holdsEditSubmits = false
+    private var editSubmitWaiters: [CheckedContinuation<Void, Never>] = []
     /// 挂起后台提交，模拟附件编码尚未完成；调用 `releaseBackgroundCommits()` 放行。
     var holdsBackgroundCommits = false
     private var backgroundCommitWaiters: [CheckedContinuation<Void, Never>] = []
@@ -659,6 +668,45 @@ final class SendActionBarTestCapability: ConversationInputCapability {
         startedCommits.append(commit)
     }
 
+    // MARK: - Editing
+
+    func addEditingObserver(
+        _ callback: @escaping (MessageEditingEvent) -> Void
+    ) -> any MessageEditingObserverHandle {
+        let id = UUID()
+        editingObservers[id] = callback
+        return SendActionBarTestHandle(cancel: { [weak self] in self?.editingObservers.removeValue(forKey: id) })
+    }
+
+    func submitEdit(_ draft: MessageEditDraft) async throws -> MessageSendCommit {
+        submittedEdits.append(draft)
+        if let editError { throw editError }
+        if holdsEditSubmits {
+            await withCheckedContinuation { editSubmitWaiters.append($0) }
+        }
+        // 与真实 `MessageEditor` 一致：提交成功即结束该会话的编辑。
+        for callback in editingObservers.values { callback(.ended(conversationID: draft.conversationID)) }
+        return editCommit ?? MessageSendCommit(conversationID: draft.conversationID, userMessageID: nil)
+    }
+
+    func releaseEditSubmits() {
+        let waiters = editSubmitWaiters
+        editSubmitWaiters = []
+        waiters.forEach { $0.resume() }
+    }
+
+    /// 与真实 `MessageEditor` 一致：取消后同步发布该会话的 `.ended`。
+    func cancelEditing() {
+        cancelEditingCount += 1
+        guard let conversationID = editSession?.draft.conversationID else { return }
+        for callback in editingObservers.values { callback(.ended(conversationID: conversationID)) }
+    }
+
+    /// 推送编辑会话开始 / 结束。
+    func emitEditingEvent(_ event: MessageEditingEvent) {
+        for callback in editingObservers.values { callback(event) }
+    }
+
     func cancelCurrentRequest() {
         cancelCount += 1
     }
@@ -684,6 +732,7 @@ final class SendActionBarTestCapability: ConversationInputCapability {
     private var conversationStateObservers: [UUID: (ConversationStateEvent) -> Void] = [:]
     private var blockObservers: [UUID: (ConversationInputBlockProvidingEvent) -> Void] = [:]
     private var inputObservers: [UUID: (ConversationInputProvidingEvent) -> Void] = [:]
+    private var editingObservers: [UUID: (MessageEditingEvent) -> Void] = [:]
 
     func addTextObserver(
         _ callback: @escaping (String) -> Void
@@ -788,7 +837,8 @@ final class SendActionBarTestCapability: ConversationInputCapability {
 @MainActor
 final class SendActionBarTestHandle: TextInputObserverHandle, MessageSenderObserverHandle,
     SelectedConversationObserverHandle, ConversationStateObserverHandle,
-    ConversationInputProvidingObserverHandle, ConversationInputBlockObserverHandle
+    ConversationInputProvidingObserverHandle, ConversationInputBlockObserverHandle,
+    MessageEditingObserverHandle
 {
     private let onCancel: () -> Void
 
