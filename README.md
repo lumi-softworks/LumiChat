@@ -31,6 +31,22 @@ Each product is an independent Swift module. A host can adopt the complete chat 
 | `PluginModelSelector` | `ModelSelectorPlugin` | Provider/model selection and model-switch feedback |
 | `PluginLLMProviderSettings` | `LLMProviderSettingsPlugin` | Provider settings and custom cloud-provider store |
 | `PluginLLMProviderOpenAI` | `OpenAIProviderPlugin` | OpenAI registration with `LLMManaging` |
+| `PluginConversationTitle` | `ConversationTitlePlugin` | Chat header title and title-update tool |
+| `PluginConversationStats` | `ConversationAgentTurnCountPlugin` | Agent turn counter in the chat header |
+| `PluginConversationTokenUsage` | `ConversationTokenUsagePlugin` | Token usage chip with detail popover |
+| `PluginConversationSpeed` | `ConversationSpeedPlugin` | Streaming speed chip with history chart |
+| `PluginConversationElapsedTime` | `ConversationElapsedTimePlugin` | Turn elapsed-time chip |
+| `PluginConversationCacheHitRate` | `ConversationCacheHitRatePlugin` | Prompt cache hit-rate chip and trend |
+| `PluginConversationMode` | `ConversationModePlugin` | Automation-level selector |
+| `PluginConversationVerbosity` | `ConversationVerbosityPlugin` | Response verbosity selector |
+| `PluginConversationBehavior` | `ConversationLanguagePlugin`, `ConversationReasoningPlugin` | Response language and reasoning-effort selectors |
+| `PluginChatFileAttachment` | `ChatFileAttachmentPlugin` | Action-bar file attachment control |
+| `PluginChatScreenshot` | `ChatScreenshotPlugin` | Action-bar screenshot capture |
+| `PluginConversationExport` | `ConversationExportPlugin` | Conversation export to HTML/Markdown |
+| `PluginConversationFork` | `ConversationForkPlugin` | Fork a conversation from a message |
+| `PluginToolActivity` | `ToolActivityPlugin` | Live tool-call activity in the chat toolbar |
+| `PluginLLMContext` | `LLMContextPlugin` | Context-window usage chip, compression, and recovery tools |
+| `PluginSkill` | `SkillPlugin` | Skill selection, management, and prompt injection |
 
 Module-specific documentation remains beside each module under [`Modules/`](Modules/).
 

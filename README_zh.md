@@ -31,6 +31,22 @@ LumiChat 是 Lumi 体系应用共享的聊天功能层。它集中提供会话�
 | `PluginModelSelector` | `ModelSelectorPlugin` | 供应商/模型选择与切换反馈 |
 | `PluginLLMProviderSettings` | `LLMProviderSettingsPlugin` | 供应商设置与自定义云端供应商存储 |
 | `PluginLLMProviderOpenAI` | `OpenAIProviderPlugin` | 向 `LLMManaging` 注册 OpenAI |
+| `PluginConversationTitle` | `ConversationTitlePlugin` | 聊天头部标题与标题更新工具 |
+| `PluginConversationStats` | `ConversationAgentTurnCountPlugin` | 聊天头部 Agent 回合计数 |
+| `PluginConversationTokenUsage` | `ConversationTokenUsagePlugin` | Token 用量徽标与详情弹窗 |
+| `PluginConversationSpeed` | `ConversationSpeedPlugin` | 流式速度徽标与历史曲线 |
+| `PluginConversationElapsedTime` | `ConversationElapsedTimePlugin` | 回合耗时徽标 |
+| `PluginConversationCacheHitRate` | `ConversationCacheHitRatePlugin` | 缓存命中率徽标与趋势 |
+| `PluginConversationMode` | `ConversationModePlugin` | 自动化等级选择器 |
+| `PluginConversationVerbosity` | `ConversationVerbosityPlugin` | 回复详略程度选择器 |
+| `PluginConversationBehavior` | `ConversationLanguagePlugin`、`ConversationReasoningPlugin` | 回复语言与推理强度选择器 |
+| `PluginChatFileAttachment` | `ChatFileAttachmentPlugin` | 操作栏文件附件按钮 |
+| `PluginChatScreenshot` | `ChatScreenshotPlugin` | 操作栏截图发送 |
+| `PluginConversationExport` | `ConversationExportPlugin` | 会话导出为 HTML/Markdown |
+| `PluginConversationFork` | `ConversationForkPlugin` | 从指定消息分叉会话 |
+| `PluginToolActivity` | `ToolActivityPlugin` | 聊天工具栏中的实时工具调用活动 |
+| `PluginLLMContext` | `LLMContextPlugin` | 上下文用量徽标、压缩与恢复工具 |
+| `PluginSkill` | `SkillPlugin` | 技能选择、管理与提示词注入 |
 
 各模块的详细文档保留在 [`Modules/`](Modules/) 下对应目录中。
 
