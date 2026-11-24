@@ -26,6 +26,7 @@ final class TokenUsageObserver {
                  let .persisted(_, conversationID),
                  let .updated(conversationID),
                  let .deleted(_, conversationID),
+                 let .truncated(_, conversationID),
                  let .cleared(conversationID):
                 onMessageChange(conversationID)
             }
