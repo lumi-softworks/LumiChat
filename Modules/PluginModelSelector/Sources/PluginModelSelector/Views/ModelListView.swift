@@ -141,6 +141,10 @@ struct ModelListView: View {
                             let modelInfo = modelInfos[model]
                             let displayName = modelInfo?.displayName ?? model
                             let isSelected = viewModel.isSelected(providerID: providerID, model: model)
+                            let downloadStatus = viewModel.downloadStatus(
+                                providerID: providerID,
+                                model: model
+                            )
 
                             ModelListItem(
                                 displayName: displayName,
@@ -148,6 +152,7 @@ struct ModelListView: View {
                                 isSelected: isSelected,
                                 modelInfo: modelInfo,
                                 isUtilityModel: viewModel.isUtilityModel(providerID: providerID, model: model),
+                                downloadStatus: downloadStatus,
                                 onSelect: {
                                     viewModel.select(providerID: providerID, model: model)
                                     onSelect?(providerID, model)

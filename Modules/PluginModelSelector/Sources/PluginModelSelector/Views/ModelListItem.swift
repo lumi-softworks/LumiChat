@@ -24,6 +24,8 @@ struct ModelListItem: View {
     ///
     /// 只做视觉标记：轻量模型仍然可以被正常选中作为对话主模型。
     let isUtilityModel: Bool
+    /// 本地模型的下载状态；远程供应商为 `.unavailable`（不展示角标）。
+    let downloadStatus: ModelDownloadStatus
     let onSelect: () -> Void
 
     init(
@@ -32,6 +34,7 @@ struct ModelListItem: View {
         isSelected: Bool,
         modelInfo: LLMModelInfo?,
         isUtilityModel: Bool = false,
+        downloadStatus: ModelDownloadStatus = .unavailable,
         onSelect: @escaping () -> Void
     ) {
         self.displayName = displayName
@@ -39,6 +42,7 @@ struct ModelListItem: View {
         self.isSelected = isSelected
         self.modelInfo = modelInfo
         self.isUtilityModel = isUtilityModel
+        self.downloadStatus = downloadStatus
         self.onSelect = onSelect
     }
 
@@ -61,6 +65,10 @@ struct ModelListItem: View {
                     }
 
                     Spacer()
+
+                    if let downloadTag {
+                        AppTag(downloadTag.title, systemImage: downloadTag.icon)
+                    }
 
                     if isUtilityModel {
                         AppTag(pluginLocalization.string("Lightweight"), systemImage: "bolt.fill")
@@ -88,6 +96,29 @@ struct ModelListItem: View {
     }
 
     // MARK: - Styling
+
+    /// 下载角标；远程供应商为 `nil`，不占用模型行空间。
+    private var downloadTag: (title: String, icon: String)? {
+        switch downloadStatus {
+        case .unavailable:
+            return nil
+        case .notDownloaded:
+            return (pluginLocalization.string("Not downloaded"), "arrow.down.circle")
+        case .downloaded:
+            return (pluginLocalization.string("Downloaded"), "externaldrive.fill")
+        case .downloading:
+            return (withPercent(pluginLocalization.string("Downloading")), "arrow.down.circle")
+        case .paused:
+            return (withPercent(pluginLocalization.string("Paused")), "pause.circle")
+        case .failed:
+            return (pluginLocalization.string("Download failed"), "exclamationmark.triangle")
+        }
+    }
+
+    private func withPercent(_ title: String) -> String {
+        guard let percent = downloadStatus.percentText else { return title }
+        return "\(title) \(percent)"
+    }
 
     /// 标题颜色：退役模型退到次级色，仍保持与普通模型的层级差异。
     private var titleColor: Color {

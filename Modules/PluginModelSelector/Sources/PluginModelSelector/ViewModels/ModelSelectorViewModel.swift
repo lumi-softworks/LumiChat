@@ -29,6 +29,11 @@ final class ModelSelectorViewModel: ObservableObject {
     /// 读取 `providerInfo.models` 会漏掉它们。
     @Published private(set) var modelInfos: [String: [LLMModelInfo]] = [:]
     @Published private(set) var usageRecords: [String: ProviderUsageRecord] = [:]
+    /// providerID -> 下载器状态快照。
+    ///
+    /// 只有实现 `LLMModelDownloadProviding` 的供应商才会出现在这里；
+    /// 视图据此判断某个模型是否已下载。
+    @Published private(set) var downloadStates: [String: LLMModelDownloadState] = [:]
     /// 左栏供应商搜索词。
     ///
     /// 必须与 `modelSearchText` 分开：两栏同屏展示，共用同一个词会让
@@ -49,6 +54,8 @@ final class ModelSelectorViewModel: ObservableObject {
     private let toastCapability: ModelSelectorToastCapability
     private var boxObserverHandle: (any LLMProviderManagerBox.ObserverHandle)?
     private var usageCancellable: AnyCancellable?
+    /// providerID -> 下载器状态订阅；供应商注销时一并取消。
+    private var downloadCancellables: [String: AnyCancellable] = [:]
 
     init(
         box: LLMProviderManagerBox,
@@ -77,6 +84,8 @@ final class ModelSelectorViewModel: ObservableObject {
         boxObserverHandle = nil
         usageCancellable?.cancel()
         usageCancellable = nil
+        downloadCancellables.removeAll()
+        downloadStates.removeAll()
     }
 
     // MARK: - Derived
@@ -119,6 +128,15 @@ final class ModelSelectorViewModel: ObservableObject {
 
     func models(for providerID: String) -> [String] {
         modelIDs[providerID] ?? []
+    }
+
+    /// 指定供应商下某个模型的下载状态。
+    ///
+    /// 供应商不支持下载（未实现 `LLMModelDownloadProviding`）时返回 `.unavailable`，
+    /// 视图据此隐藏下载角标。
+    func downloadStatus(providerID: String, model: String) -> ModelDownloadStatus {
+        guard let state = downloadStates[providerID] else { return .unavailable }
+        return ModelDownloadStatus(state: state, modelID: model)
     }
 
     /// 指定供应商的模型元数据（动态模型池）。
@@ -317,9 +335,35 @@ final class ModelSelectorViewModel: ObservableObject {
         // 否则用户点开别的供应商时对号会跟着高亮跑，失去指示作用。
         activeProviderID = selectedModelID.flatMap { LLMModelID(rawValue: $0)?.providerID }
         providerInfos = box.providerInfos
+        refreshDownloadObservers()
         modelIDs = box.modelIDs
         modelInfos = box.modelInfos
         usageRecords = usageStore.records
         revision &+= 1
+    }
+
+    /// 为支持下载的供应商建立状态订阅。
+    ///
+    /// 快照只在首次订阅时读取一次（部分下载器的 `downloadState` 会扫描磁盘），
+    /// 之后完全由 `downloadStatePublisher` 驱动；供应商注销时取消订阅并清掉快照。
+    private func refreshDownloadObservers() {
+        let downloaderProviderIDs = Set(providerInfos.compactMap { info in
+            box.downloader(for: info.id) == nil ? nil : info.id
+        })
+
+        for providerID in Array(downloadCancellables.keys)
+        where !downloaderProviderIDs.contains(providerID) {
+            downloadCancellables.removeValue(forKey: providerID)
+            downloadStates.removeValue(forKey: providerID)
+        }
+
+        for providerID in downloaderProviderIDs where downloadCancellables[providerID] == nil {
+            guard let downloader = box.downloader(for: providerID) else { continue }
+            downloadStates[providerID] = downloader.downloadState
+            downloadCancellables[providerID] = downloader.downloadStatePublisher
+                .sink { [weak self] state in
+                    self?.downloadStates[providerID] = state
+                }
+        }
     }
 }

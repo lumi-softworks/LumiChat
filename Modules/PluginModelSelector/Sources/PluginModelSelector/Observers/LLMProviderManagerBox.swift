@@ -123,6 +123,11 @@ public final class LLMProviderManagerBox {
         return manager.modelRoute(for: id)
     }
 
+    /// 供应商的模型下载能力；远程供应商未实现 `LLMModelDownloadProviding` 时返回 `nil`。
+    public func downloader(for providerID: String) -> (any LLMModelDownloadProviding)? {
+        manager.provider(id: providerID) as? any LLMModelDownloadProviding
+    }
+
     /// 在当前上下文中选择供应商与模型。
     public func select(providerID: String, model: String?) {
         selection.select(providerID: providerID, model: model)
