@@ -5,6 +5,7 @@ import ProviderAgentLoop
 import ProviderConversation
 import ProviderMessage
 import ProviderMessageSender
+import ProviderToolManager
 import LumiLoggingKit
 /// 消息发送装配插件。
 @MainActor
@@ -44,6 +45,22 @@ public final class MessageSenderPlugin: SuperPlugin, SuperLog {
             agentLoop: agentLoop
         )
         try kernel.registerProvider((any MessageSendingProviding).self, sender)
+
+        // 工具管理器是可选依赖：缺失时编辑照常可用，只是不清旧回合的工具记录。
+        var deleteToolCalls: MessageEditor.ToolCallDeleter?
+        if let toolManager = kernel.resolveProvider((any ToolManagerProviding).self) {
+            deleteToolCalls = { turnIDs, conversationID in
+                await toolManager.deleteToolCalls(forTurnIDs: turnIDs, in: conversationID)
+            }
+        }
+        let editor = MessageEditor(
+            conversations: conversations,
+            messages: messages,
+            agentLoop: agentLoop,
+            messageSending: sender,
+            deleteToolCalls: deleteToolCalls
+        )
+        try kernel.registerProvider((any MessageEditingProviding).self, editor)
         agentLoopObserver = AgentLoopObserver(agentLoop: agentLoop, sender: sender)
 
         // 先恢复上次未排空的待发队列，再订阅变化即时落盘，
