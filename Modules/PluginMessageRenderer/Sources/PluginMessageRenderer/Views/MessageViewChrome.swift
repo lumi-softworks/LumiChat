@@ -9,6 +9,8 @@ struct MessageViewChrome<Content: View>: View {
     var capability: (any MessageRendererCapability)? = nil
     let message: Message
     var showsResendButton = false
+    /// 用户消息行是否提供「编辑」入口（仅最新一条可编辑）。
+    var showsEditButton = false
     /// 失败消息是否提供「重试」入口（错误消息行）。是否真能重试由回合状态决定。
     var showsRetryButton = false
     var showsHeader = true
@@ -23,6 +25,7 @@ struct MessageViewChrome<Content: View>: View {
     /// 悬停进入防抖:滚动时光标下的行快速进出,立即物化按钮会造成
     /// hover 风暴;停留 150ms 才显示(标准菜单式交互),离开立即隐藏。
     @State private var hoverDebounceTask: Task<Void, Never>?
+    @StateObject private var editOffer = UserMessageEditOfferState()
     @ViewBuilder let content: () -> Content
 
     private var isBrief: Bool {
@@ -79,6 +82,10 @@ struct MessageViewChrome<Content: View>: View {
                             )
                         }
 
+                        if showsActions, showsEditButton, editOffer.isOffered, let capability {
+                            EditUserMessageButton(capability: capability, message: message)
+                        }
+
                         if showsActions, showsResendButton, capability != nil, !message.content.isEmpty {
                             ResendMessageButton(capability: capability, message: message)
                         }
@@ -126,8 +133,13 @@ struct MessageViewChrome<Content: View>: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            editOffer.refresh(message, capability: capability)
+        }
         .onHover { hovering in
             if hovering {
+                // 悬停正是按钮组变可见的时刻，在这里刷新可编辑性。
+                editOffer.refresh(message, capability: capability)
                 hoverDebounceTask?.cancel()
                 hoverDebounceTask = Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(150))

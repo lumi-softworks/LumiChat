@@ -45,6 +45,7 @@ struct UserMessageView: View {
             capability: capability,
             message: message,
             showsResendButton: true,
+            showsEditButton: true,
             verbosity: verbosity
         ) {
             VStack(alignment: .leading, spacing: 8) {

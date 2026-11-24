@@ -33,6 +33,8 @@ struct ZCodeUserMessageView: View {
     ///   本视图一次，`let` 持有的状态对象会被重建，
     ///   hover 防抖任务随之丢失（进入防抖永远不生效）。
     @StateObject private var hoverState = MessageHoverState()
+    /// 编辑入口是否提供（仅最新一条真实用户消息）。
+    @StateObject private var editOffer = UserMessageEditOfferState()
     /// 是否键盘聚焦。
     @FocusState private var hasKeyboardFocus: Bool
 
@@ -64,9 +66,17 @@ struct ZCodeUserMessageView: View {
                     //   **完全丢掉**这个元素，键盘用户与 UI 测试都拿不到它。
                     //   正确做法是保留在树上、只改透明度，并用
                     //   `accessibilityHidden` 之外的手段表达「当前不可见」。
-                    copyButton
-                        .opacity(isCopyVisible ? 1 : 0)
-                        .accessibilityHidden(false)
+                    HStack(spacing: 4) {
+                        copyButton
+                        // 编辑按钮遵循同一规则：可编辑时始终留在 AX 树里。
+                        if editOffer.isOffered {
+                            EditUserMessageButton(capability: capability, message: message)
+                        }
+                    }
+                    .opacity(UserMessageEditAccessibility.opacity(isVisible: isCopyVisible))
+                    .accessibilityHidden(
+                        UserMessageEditAccessibility.removesHiddenButtonFromAccessibilityTree
+                    )
                 }
             }
             // Important: hover 域挂在**气泡内容**上，不挂在整行 layout 上。
@@ -79,14 +89,18 @@ struct ZCodeUserMessageView: View {
             //   挂到内容上之后，只有真正悬停在气泡 / 附件 / 按钮上才触发。
             .contentShape(Rectangle())
             .onHover { hovering in
+                // 悬停正是按钮变可见的时刻，在这里刷新可编辑性。
+                if hovering { editOffer.refresh(message, capability: capability) }
                 hoverState.setHovering(hovering)
             }
         ))
         .onAppear {
             collapseState.updateIdentity(content: message.content, rowID: rowIdentity)
+            editOffer.refresh(message, capability: capability)
         }
         .onChange(of: rowIdentity) { _, newValue in
             collapseState.updateIdentity(content: message.content, rowID: newValue)
+            editOffer.refresh(message, capability: capability)
         }
     }
 

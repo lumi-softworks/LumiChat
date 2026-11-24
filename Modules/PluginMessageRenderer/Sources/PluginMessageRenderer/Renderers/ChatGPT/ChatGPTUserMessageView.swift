@@ -16,6 +16,8 @@ struct ChatGPTUserMessageView: View {
 
     @State private var isHovered = false
     @FocusState private var hasKeyboardFocus: Bool
+    /// 编辑入口是否提供（仅最新一条真实用户消息）。
+    @StateObject private var editOffer = UserMessageEditOfferState()
 
     static func usesChatGPTPresentation(verbosity: ResponseVerbosity) -> Bool {
         verbosity == .chatGPT
@@ -59,7 +61,14 @@ struct ChatGPTUserMessageView: View {
         }
         .focusable()
         .focused($hasKeyboardFocus)
-        .onHover { isHovered = $0 }
+        .onAppear {
+            editOffer.refresh(message, capability: capability)
+        }
+        .onHover { hovering in
+            // 悬停正是操作栏变可见的时刻，在这里刷新可编辑性。
+            if hovering { editOffer.refresh(message, capability: capability) }
+            isHovered = hovering
+        }
     }
 
     @ViewBuilder
@@ -122,6 +131,14 @@ struct ChatGPTUserMessageView: View {
             .accessibilityIdentifier(ChatGPTRendererAccessibilityIdentifiers.userCopyButton)
             .accessibilityLabel(pluginLocalization.string("Copy"))
             .help(pluginLocalization.string("Copy"))
+
+            if editOffer.isOffered {
+                EditUserMessageButton(
+                    capability: capability,
+                    message: message,
+                    size: ChatGPTUserBubbleStyle.actionButtonSize
+                )
+            }
 
             Button {
                 Task {

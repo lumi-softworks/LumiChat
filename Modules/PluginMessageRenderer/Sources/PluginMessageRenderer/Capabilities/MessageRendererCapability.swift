@@ -30,6 +30,15 @@ protocol MessageRendererCapability: AnyObject {
     /// 图片与文件附件也一并送出（#372）。旧实现只发正文，附件被悄悄丢弃。
     func resendMessage(_ message: Message) async
 
+    // MARK: 编辑最新用户消息
+
+    /// 该行是否提供「编辑」入口：只有会话里最新的一条真实用户消息可编辑，
+    /// 合成行、排队中、自动回复被抑制等情况一律不提供。
+    func canEditUserMessage(_ message: Message, conversationID: UUID) -> Bool
+
+    /// 让输入框进入该消息的编辑模式；消息此刻不可编辑时什么也不做。
+    func beginEditingUserMessage(_ message: Message, conversationID: UUID)
+
     // MARK: 重试失败回合
 
     /// 当前会话是否仍停留在该失败回合上（可重试）。
@@ -81,6 +90,7 @@ final class MessageRendererCapabilityAdapter: MessageRendererCapability {
     private weak var toolManager: (any ToolManagerProviding)?
     private weak var agentLoop: (any AgentLoopProviding)?
     private weak var messageSending: (any MessageSendingProviding)?
+    private weak var editing: (any MessageEditingProviding)?
     private weak var toolCallRendering: (any ToolCallRenderingProviding)?
     private weak var developerMode: (any DeveloperModeProviding)?
 
@@ -88,6 +98,7 @@ final class MessageRendererCapabilityAdapter: MessageRendererCapability {
         toolManager = kernel.resolveProvider((any ToolManagerProviding).self)
         agentLoop = kernel.resolveProvider((any AgentLoopProviding).self)
         messageSending = kernel.resolveProvider((any MessageSendingProviding).self)
+        editing = kernel.resolveProvider((any MessageEditingProviding).self)
         toolCallRendering = kernel.resolveProvider((any ToolCallRenderingProviding).self)
         developerMode = kernel.resolveProvider((any DeveloperModeProviding).self)
     }
@@ -116,6 +127,14 @@ final class MessageRendererCapabilityAdapter: MessageRendererCapability {
             fileAttachments: fileAttachments,
             conversationID: message.conversationID
         )
+    }
+
+    func canEditUserMessage(_ message: Message, conversationID: UUID) -> Bool {
+        editing?.eligibility(for: message, in: conversationID) == .allowed
+    }
+
+    func beginEditingUserMessage(_ message: Message, conversationID: UUID) {
+        editing?.beginEditing(message: message, in: conversationID)
     }
 
     func canRetryTurn(turnID: UUID, conversationID: UUID) -> Bool {
