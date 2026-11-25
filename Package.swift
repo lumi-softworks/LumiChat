@@ -38,7 +38,7 @@ let package = Package(
         .package(url: "https://github.com/lumi-softworks/LumiLocalization.git", from: "1.0.3"),
         .package(url: "https://github.com/lumi-softworks/LumiLogging.git", from: "1.0.3"),
         .package(url: "https://github.com/lumi-softworks/LumiSettings.git", from: "1.1.1"),
-        .package(url: "https://github.com/lumi-softworks/LumiKitLLM.git", from: "1.1.1"),
+        .package(url: "https://github.com/lumi-softworks/LumiKitLLM.git", from: "1.2.0"),
         .package(url: "https://github.com/lumi-softworks/LumiProviderToolManager.git", from: "1.0.5"),
         .package(url: "https://github.com/lumi-softworks/LumiKitMarkdown.git", from: "1.0.1"),
         .package(url: "https://github.com/lumi-softworks/LumiKitMessageList.git", from: "1.0.0"),

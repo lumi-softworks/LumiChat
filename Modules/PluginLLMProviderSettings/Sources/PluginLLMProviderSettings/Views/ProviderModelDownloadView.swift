@@ -96,6 +96,29 @@ struct ProviderModelDownloadView: View {
             }
         }
     }
+
+    /// 把状态（或模型 id）与内存/磁盘需求拼成一行。
+    ///
+    /// 已下载模型用实际磁盘占用，未下载模型用元数据里的完整体积（标注「约」）。
+    private static func composedDescription(
+        status: String,
+        minimumMemoryBytes: Int64?,
+        sizeBytes: Int64?,
+        sizeIsExact: Bool
+    ) -> String {
+        var parts = [status]
+        if let minimumMemoryBytes, minimumMemoryBytes > 0 {
+            let gib = (minimumMemoryBytes + 1_073_741_823) / 1_073_741_824
+            parts.append(String(format: pluginLocalization.string("最低 %lld GB 内存"), gib))
+        }
+        if let sizeBytes, sizeBytes > 0 {
+            let formatted = ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file)
+            let key = sizeIsExact ? "%@ 磁盘" : "约 %@ 磁盘"
+            parts.append(String(format: pluginLocalization.string(key), formatted))
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private var speedLimitDescription: String {
         switch speedLimitBytes {
         case 0: pluginLocalization.string("不限速")
@@ -121,16 +144,22 @@ struct ProviderModelDownloadView: View {
             if isCached { return "externaldrive.fill" }
             return "arrow.down.circle"
         }()
-        // 根据状态确定描述
-        let rowDescription: String? = {
+        // 根据状态确定描述；状态之后追加最低内存与磁盘占用。
+        let statusText: String = {
             if isDownloading { return pluginLocalization.string("正在下载...") }
             if isPaused { return pluginLocalization.string("已暂停") }
             if isCached { return pluginLocalization.string("已下载") }
-            return nil
+            return model.id
         }()
+        let cachedSizeBytes = isCached ? downloadState.downloadedModelSizesBytes[model.id] : nil
         AppSettingRow(
             title: model.displayName,
-            description: rowDescription ?? model.id,
+            description: Self.composedDescription(
+                status: statusText,
+                minimumMemoryBytes: model.minimumMemoryBytes,
+                sizeBytes: cachedSizeBytes ?? model.downloadSizeBytes,
+                sizeIsExact: cachedSizeBytes != nil
+            ),
             icon: rowIcon
         ) {
             HStack(spacing: 6) {

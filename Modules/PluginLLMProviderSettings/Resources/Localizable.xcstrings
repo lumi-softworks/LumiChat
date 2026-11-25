@@ -954,6 +954,36 @@
           }
         }
       }
+    },
+    "最低 %lld GB 内存" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Min %lld GB RAM"
+          }
+        }
+      }
+    },
+    "%@ 磁盘" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ on disk"
+          }
+        }
+      }
+    },
+    "约 %@ 磁盘" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "~%@ on disk"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
