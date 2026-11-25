@@ -36,6 +36,8 @@ struct LocalizationIntegrityTests {
         "%lld 个模型",
         "%lld 个本地供应商",
         "%lld 个云端供应商",
+        "云端",
+        "本地",
         "添加供应商",
         "未找到供应商",
         "选择一个供应商",
@@ -85,6 +87,23 @@ struct LocalizationIntegrityTests {
                 english != key,
                 "「\(key)」的 en 翻译仍是中文原文，英文界面不会生效"
             )
+        }
+    }
+
+    @Test("供应商设置页的可见文案都有简体中文翻译")
+    func userFacingKeysIncludeSimplifiedChinese() throws {
+        let catalog = try Self.loadCatalog()
+
+        for key in Self.userFacingKeys {
+            let entry = try #require(
+                catalog[key],
+                "「\(key)」未出现在 xcstrings 中，但代码里已作为可见文案使用"
+            )
+            let chinese = try #require(
+                entry["zh-Hans"],
+                "「\(key)」缺少 zh-Hans 翻译，中文界面会回退到英文"
+            )
+            #expect(!chinese.isEmpty, "「\(key)」的 zh-Hans 翻译为空")
         }
     }
 

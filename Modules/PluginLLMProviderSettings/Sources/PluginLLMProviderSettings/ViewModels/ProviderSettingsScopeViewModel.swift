@@ -14,8 +14,8 @@ enum ProviderSettingsScope: String, CaseIterable, Identifiable, Equatable {
     /// 分段控件上的页签标题。
     var title: String {
         switch self {
-        case .cloud: pluginLocalization.string("Cloud")
-        case .local: pluginLocalization.string("Local")
+        case .cloud: pluginLocalization.string("云端")
+        case .local: pluginLocalization.string("本地")
         }
     }
 
