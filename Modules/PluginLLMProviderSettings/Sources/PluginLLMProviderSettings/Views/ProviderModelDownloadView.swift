@@ -20,6 +20,9 @@ struct ProviderModelDownloadView: View {
     private let isModelSelected: (String) -> Bool
     @ObservedObject private var viewModel: ProviderModelDownloadViewModel
     @State private var speedLimitBytes: Int
+    #if os(macOS)
+    @State private var deviceInfo: LocalDeviceInfo
+    #endif
 
     init(
         models: [LLMModelInfo],
@@ -34,9 +37,15 @@ struct ProviderModelDownloadView: View {
         self.onSelectModel = onSelectModel
         self.isModelSelected = isModelSelected
         _speedLimitBytes = State(initialValue: viewModel.downloadState.speedLimitBytesPerSecond ?? 0)
+        #if os(macOS)
+        _deviceInfo = State(initialValue: .current(cacheDirectory: capability.modelCacheDirectoryURL))
+        #endif
     }
 
     var body: some View {
+        #if os(macOS)
+        DeviceInfoSection(info: deviceInfo)
+        #endif
         AppSettingSection(title: pluginLocalization.string("模型下载")) {
             VStack(spacing: 0) {
                 cacheRow
@@ -56,7 +65,12 @@ struct ProviderModelDownloadView: View {
                 }
             }
         }
-        .onAppear { capability.refreshDownloadState() }
+        .onAppear {
+            capability.refreshDownloadState()
+            #if os(macOS)
+            deviceInfo = .current(cacheDirectory: capability.modelCacheDirectoryURL)
+            #endif
+        }
     }
 
     private var downloadState: LLMModelDownloadState { viewModel.downloadState }
