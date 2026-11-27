@@ -13,6 +13,8 @@ let package = Package(
         .package(url: "https://github.com/lumi-softworks/LumiKernel.git", from: "1.1.1"),
         .package(url: "https://github.com/lumi-softworks/LumiLocalization.git", from: "1.0.2"),
         .package(url: "https://github.com/lumi-softworks/LumiUI.git", from: "1.18.1"),
+        .package(url: "https://github.com/lumi-softworks/LumiKitLLM.git", from: "1.3.0"),
+        .package(url: "https://github.com/lumi-softworks/LumiProviderLLMManager.git", from: "1.0.0"),
         .package(path: "../ProviderConversationInputBlock"),
         .package(path: "../ProviderConversationState"),
         .package(path: "../ProviderAgentLoop"),
@@ -35,6 +37,8 @@ let package = Package(
                 .product(name: "ProviderConversationInput", package: "LumiProviders"),
                 "ProviderMessage",
                 "ProviderMessageSender",
+                .product(name: "ProviderLLMManager", package: "LumiProviderLLMManager"),
+                .product(name: "KitLLM", package: "LumiKitLLM"),
                 .product(name: "LumiLoggingKit", package: "LumiLogging"),
             ],
             path: "Sources/PluginConversationInput",
@@ -51,6 +55,8 @@ let package = Package(
                 .product(name: "ProviderLifecycleHooks", package: "ProviderLifecycleHooks"),
                 .product(name: "ProviderMessage", package: "ProviderMessage"),
                 .product(name: "ProviderMessageSender", package: "ProviderMessageSender"),
+                .product(name: "KitLLM", package: "LumiKitLLM"),
+                .product(name: "ProviderLLMManager", package: "LumiProviderLLMManager"),
             ]
         ),
     ]

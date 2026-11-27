@@ -1,9 +1,11 @@
 import Foundation
+import KitLLM
 import PluginMessageSender
 import ProviderConversation
 import ProviderConversationInput
 import ProviderConversationInputBlock
 import ProviderConversationState
+import ProviderLLMManager
 import ProviderMessage
 import ProviderMessageSender
 import SwiftUI
@@ -104,6 +106,14 @@ protocol ConversationInputCapability: AnyObject {
     /// 停止按钮的可见性由它决定：只要还有活没干完，就给用户一个停止入口。
     func canStop(for conversationID: UUID?) -> Bool
 
+    // MARK: - Local model memory confirmation
+
+    /// 目标会话当前生效模型的大内存二次确认信息；无需确认时返回 `nil`。
+    ///
+    /// 两条发送入口在提交前都要过这道门：本地模型首次加载可能占用数 GB
+    /// 内存并拖慢整机，确认发生在落库之前，用户取消时输入框草稿原样保留。
+    func localModelMemoryWarning(for conversationID: UUID?) -> LocalModelMemoryWarning?
+
     // MARK: - Observation
 
     @discardableResult
@@ -137,6 +147,14 @@ protocol ConversationInputCapability: AnyObject {
     ) -> any ConversationStateObserverHandle
 }
 
+extension ConversationInputCapability {
+    /// 默认不做大模型确认：未接入 LLM 管理能力的实现（含既有测试替身）
+    /// 无需改动即可编译，行为与接入前一致。
+    func localModelMemoryWarning(for conversationID: UUID?) -> LocalModelMemoryWarning? {
+        nil
+    }
+}
+
 /// 将输入/发送相关 Provider 适配为插件能力。
 @MainActor
 final class ConversationInputCapabilityAdapter: ConversationInputCapability {
@@ -146,6 +164,8 @@ final class ConversationInputCapabilityAdapter: ConversationInputCapability {
     private let conversations: (any ConversationManaging)?
     private let conversationState: (any ConversationStateProviding)?
     private let editing: (any MessageEditingProviding)?
+    /// LLM 管理能力。可选依赖：缺失时跳过大模型确认，发送照常。
+    private let llmManager: (any LLMManaging)?
     /// 草稿里的折叠块区间。草稿级状态，随正文一起清空。
     private var storedCollapsedBlocks: [CollapsedContentBlock] = []
     /// 草稿提交中标记。两条发送入口共用，见协议声明。
@@ -158,7 +178,8 @@ final class ConversationInputCapabilityAdapter: ConversationInputCapability {
         sender: (any MessageSendingProviding)?,
         conversations: (any ConversationManaging)?,
         conversationState: (any ConversationStateProviding)?,
-        editing: (any MessageEditingProviding)? = nil
+        editing: (any MessageEditingProviding)? = nil,
+        llmManager: (any LLMManaging)? = nil
     ) {
         self.input = input
         self.blocks = blocks
@@ -166,6 +187,7 @@ final class ConversationInputCapabilityAdapter: ConversationInputCapability {
         self.conversations = conversations
         self.conversationState = conversationState
         self.editing = editing
+        self.llmManager = llmManager
     }
 
     // MARK: - Input
@@ -344,6 +366,36 @@ final class ConversationInputCapabilityAdapter: ConversationInputCapability {
     func canStop(for conversationID: UUID?) -> Bool {
         guard let conversationID else { return false }
         return conversationState?.state(for: conversationID).canStop ?? false
+    }
+
+    // MARK: - Local model memory confirmation
+
+    func localModelMemoryWarning(for conversationID: UUID?) -> LocalModelMemoryWarning? {
+        guard let llmManager,
+              let modelID = effectiveModelID(for: conversationID),
+              let route = llmManager.modelRoute(for: modelID) else {
+            return nil
+        }
+        // 驻留状态由供应商自报：已驻留的模型不会再触发加载，不再打扰用户。
+        let residency = llmManager.provider(id: route.providerID) as? any LLMModelResidencyProviding
+        let isResident = residency?.isModelResident(modelID: route.modelInfo.id)
+        return LocalModelMemoryWarning.warningIfHeavy(
+            providerInfo: route.providerInfo,
+            modelInfo: route.modelInfo,
+            physicalMemoryBytes: Int64(ProcessInfo.processInfo.physicalMemory),
+            isModelResident: isResident
+        )
+    }
+
+    /// 目标会话的生效模型：会话级选择优先；未设置或已失效时回退全局选中。
+    private func effectiveModelID(for conversationID: UUID?) -> LLMModelID? {
+        if let conversationID,
+           let raw = conversations?.modelID(for: conversationID),
+           let parsed = LLMModelID(rawValue: raw),
+           llmManager?.modelRoute(for: parsed) != nil {
+            return parsed
+        }
+        return llmManager?.selectedModelID
     }
 
     // MARK: - Observation

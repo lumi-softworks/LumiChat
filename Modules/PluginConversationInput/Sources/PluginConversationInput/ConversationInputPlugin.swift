@@ -6,6 +6,7 @@ import ProviderConversation
 import ProviderConversationState
 import ProviderConversationInput
 import ProviderConversationInputBlock
+import ProviderLLMManager
 import ProviderMessageSender
 import LumiLoggingKit
 import SwiftUI
@@ -56,6 +57,8 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
         let conversationState = kernel.resolveProvider((any ConversationStateProviding).self)
         // 编辑能力是可选依赖：缺失时输入框照常收发，只是没有编辑模式。
         let editing = kernel.resolveProvider((any MessageEditingProviding).self)
+        // LLM 管理也是可选依赖：缺失时跳过大模型发送确认。
+        let llmManager = kernel.resolveProvider((any LLMManaging).self)
 
         // 组装层：Capability → ViewModel → Observer → View。
         let capability = ConversationInputCapabilityAdapter(
@@ -64,7 +67,8 @@ public final class ConversationInputPlugin: SuperPlugin, SuperLog {
             sender: sender,
             conversations: conversations,
             conversationState: conversationState,
-            editing: editing
+            editing: editing,
+            llmManager: llmManager
         )
         self.capability = capability
 

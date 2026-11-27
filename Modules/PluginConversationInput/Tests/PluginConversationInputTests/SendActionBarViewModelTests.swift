@@ -547,6 +547,12 @@ final class SendActionBarTestCapability: ConversationInputCapability {
     var sendingConversationIDs: Set<UUID> = []
     /// 回合挂在等用户授权/回答（`agentLoopState == .suspended`）的会话。
     var suspendedConversationIDs: Set<UUID> = []
+    /// `localModelMemoryWarning` 的固定返回值；默认 `nil` 走默认放行。
+    var localModelWarningResult: LocalModelMemoryWarning?
+
+    func localModelMemoryWarning(for conversationID: UUID?) -> LocalModelMemoryWarning? {
+        localModelWarningResult
+    }
 
     // MARK: - Input
 

@@ -24,6 +24,17 @@ final class SendActionBarViewModel: ObservableObject, SuperLog {
 
     @Published private(set) var state: SendActionBarState
 
+    /// 待确认的大内存本地模型告警；非 `nil` 时视图弹出二次确认。
+    @Published private(set) var pendingLocalModelWarning: LocalModelMemoryWarning?
+
+    /// 等待大模型二次确认的发送快照。确认后按这份快照继续，取消则丢弃。
+    private struct PendingSend {
+        let content: String
+        let blocks: [CollapsedContentBlock]
+        let conversationID: UUID?
+    }
+    private var pendingWarningSend: PendingSend?
+
     // MARK: - Lifecycle
 
     init(capability: any ConversationInputCapability) {
@@ -114,6 +125,42 @@ final class SendActionBarViewModel: ObservableObject, SuperLog {
         // 仍落在发起发送的那个会话，绝不能把新会话的独立草稿当成这次发送（#1173）。
         let conversationID = capability.selectedConversationID
 
+        // 大内存本地模型：先二次确认再提交。确认发生在落库之前，取消时
+        // 用户消息不会先上屏再消失，输入框草稿原样保留。编辑模式的提交
+        // 已在上面转交输入框 ViewModel，由它的门禁覆盖。
+        if let warning = capability.localModelMemoryWarning(for: conversationID) {
+            pendingWarningSend = PendingSend(
+                content: content,
+                blocks: blocks,
+                conversationID: conversationID
+            )
+            pendingLocalModelWarning = warning
+            return
+        }
+
+        proceedSend(content: content, blocks: blocks, conversationID: conversationID)
+    }
+
+    /// 大模型二次确认：继续发送。
+    func confirmLocalModelSend() {
+        guard let pending = pendingWarningSend else { return }
+        pendingWarningSend = nil
+        pendingLocalModelWarning = nil
+        proceedSend(
+            content: pending.content,
+            blocks: pending.blocks,
+            conversationID: pending.conversationID
+        )
+    }
+
+    /// 大模型二次确认：取消发送，草稿原样保留。
+    func cancelLocalModelSend() {
+        pendingWarningSend = nil
+        pendingLocalModelWarning = nil
+    }
+
+    /// 确认通过（或无需确认）后的提交链路。
+    private func proceedSend(content: String, blocks: [CollapsedContentBlock], conversationID: UUID?) {
         // 附件还在异步读取：等读取结束再提交，否则这条消息会漏掉用户刚选中
         // 的附件，附件又滚进下一条无关消息（#1023）。
         if capability.pendingAttachmentReadCount > 0 {

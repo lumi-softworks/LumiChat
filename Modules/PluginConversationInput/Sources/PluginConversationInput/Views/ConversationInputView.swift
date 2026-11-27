@@ -48,5 +48,14 @@ struct ConversationInputView: View {
             )
         }
         .background(theme.background)
+        // 回车发送路径的大模型二次确认。
+        .localModelMemoryWarningDialog(
+            warning: Binding(
+                get: { viewModel.pendingLocalModelWarning },
+                set: { _ in viewModel.cancelLocalModelSend() }
+            ),
+            onConfirm: { viewModel.confirmLocalModelSend() },
+            onCancel: { viewModel.cancelLocalModelSend() }
+        )
     }
 }

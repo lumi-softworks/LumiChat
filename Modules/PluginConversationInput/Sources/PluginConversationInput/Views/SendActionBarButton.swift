@@ -54,17 +54,28 @@ private struct SendActionBarObservedContent: View {
     var body: some View {
         let state = viewModel.state
 
-        if state.showsSendButton {
-            SendButton(canSend: state.canSend, action: { viewModel.send() })
-                .help(pluginLocalization.string("Send"))
-                .accessibilityIdentifier(SendActionBarAccessibility.sendButton)
-        }
+        Group {
+            if state.showsSendButton {
+                SendButton(canSend: state.canSend, action: { viewModel.send() })
+                    .help(pluginLocalization.string("Send"))
+                    .accessibilityIdentifier(SendActionBarAccessibility.sendButton)
+            }
 
-        if state.showsStopButton {
-            StopButton(action: { viewModel.cancel() })
-                .help(pluginLocalization.string("Stop"))
-                .accessibilityIdentifier(SendActionBarAccessibility.stopButton)
+            if state.showsStopButton {
+                StopButton(action: { viewModel.cancel() })
+                    .help(pluginLocalization.string("Stop"))
+                    .accessibilityIdentifier(SendActionBarAccessibility.stopButton)
+            }
         }
+        // 发送按钮路径的大模型二次确认。
+        .localModelMemoryWarningDialog(
+            warning: Binding(
+                get: { viewModel.pendingLocalModelWarning },
+                set: { _ in viewModel.cancelLocalModelSend() }
+            ),
+            onConfirm: { viewModel.confirmLocalModelSend() },
+            onCancel: { viewModel.cancelLocalModelSend() }
+        )
     }
 }
 

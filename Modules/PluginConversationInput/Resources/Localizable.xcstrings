@@ -375,6 +375,40 @@
         }
       }
     },
+    "Loading %@ takes about %@ of memory, which may make your Mac feel sluggish." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading %@ takes about %@ of memory, which may make your Mac feel sluggish."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载 %@ 约需 %@ 内存，期间电脑可能明显卡顿。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "載入 %@ 約需 %@ 記憶體，期間電腦可能明顯卡頓。"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "載入 %@ 約需 %@ 記憶體，期間電腦可能明顯卡頓。"
+          }
+        },
+        "zh-TW" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "載入 %@ 約需 %@ 記憶體，期間電腦可能明顯卡頓。"
+          }
+        }
+      }
+    },
     "Missing provider(s): %@" : {
       "localizations" : {
         "en" : {
@@ -647,6 +681,40 @@
         }
       }
     },
+    "Send Anyway" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Anyway"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍要发送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍要傳送"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍要傳送"
+          }
+        },
+        "zh-TW" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍要傳送"
+          }
+        }
+      }
+    },
     "Stop" : {
       "localizations" : {
         "en" : {
@@ -847,6 +915,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這則訊息不能再編輯了。"
+          }
+        }
+      }
+    },
+    "This model may slow down your Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model may slow down your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该模型可能让电脑变卡"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該模型可能讓電腦變卡"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該模型可能令電腦變卡"
+          }
+        },
+        "zh-TW" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該模型可能讓電腦變卡"
           }
         }
       }

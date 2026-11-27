@@ -33,6 +33,8 @@ final class ConversationInputViewModel: ObservableObject, SuperLog {
     @Published private(set) var canSend = false
     /// 进行中的编辑会话：输入框里是被编辑消息的草稿，发送时改走 `submitEdit`。
     @Published private(set) var editSession: MessageEditSession?
+    /// 待确认的大内存本地模型告警；非 `nil` 时视图弹出二次确认。
+    @Published private(set) var pendingLocalModelWarning: LocalModelMemoryWarning?
     /// 下发到编辑器的正文里要还原成 chip 的折叠块。
     ///
     /// 绑定正文被程序改写时，编辑器只会按纯文本重写自己；没有它，编辑带折叠块的消息
@@ -62,6 +64,15 @@ final class ConversationInputViewModel: ObservableObject, SuperLog {
     private let capability: any ConversationInputCapability
     /// 是否已经在等待在途附件读取。避免重复触发 Return 时排起多条发送链。
     private var isWaitingForAttachmentReads = false
+
+    /// 等待大模型二次确认的发送快照。确认后按这份快照继续，取消则丢弃。
+    private struct PendingSend {
+        let content: String
+        let blocks: [CollapsedContentBlock]
+        let conversationID: UUID?
+        let session: MessageEditSession?
+    }
+    private var pendingWarningSend: PendingSend?
 
     /// 当前草稿归属的对话；nil 表示「新建会话」未选中态。
     /// 切换判定延迟到下一主 actor 轮次时，用它识别瞬时的选中往返（#781）。
@@ -326,6 +337,48 @@ final class ConversationInputViewModel: ObservableObject, SuperLog {
         let conversationID = capability.selectedConversationID
         let session = editSession
 
+        // 大内存本地模型：先二次确认再提交。确认发生在落库之前，取消时
+        // 用户消息不会先上屏再消失，输入框草稿原样保留。
+        if let warning = capability.localModelMemoryWarning(for: conversationID) {
+            pendingWarningSend = PendingSend(
+                content: content,
+                blocks: blocks,
+                conversationID: conversationID,
+                session: session
+            )
+            pendingLocalModelWarning = warning
+            return
+        }
+
+        proceedSend(content: content, blocks: blocks, conversationID: conversationID, session: session)
+    }
+
+    /// 大模型二次确认：继续发送。
+    func confirmLocalModelSend() {
+        guard let pending = pendingWarningSend else { return }
+        pendingWarningSend = nil
+        pendingLocalModelWarning = nil
+        proceedSend(
+            content: pending.content,
+            blocks: pending.blocks,
+            conversationID: pending.conversationID,
+            session: pending.session
+        )
+    }
+
+    /// 大模型二次确认：取消发送，草稿原样保留。
+    func cancelLocalModelSend() {
+        pendingWarningSend = nil
+        pendingLocalModelWarning = nil
+    }
+
+    /// 确认通过（或无需确认）后的提交链路：等附件读取，然后分发发送。
+    private func proceedSend(
+        content: String,
+        blocks: [CollapsedContentBlock],
+        conversationID: UUID?,
+        session: MessageEditSession?
+    ) {
         // 附件还在异步读取：等读取结束再提交，否则这条消息会漏掉用户刚选中
         // 的附件，附件又滚进下一条无关消息（#1023）。
         if capability.pendingAttachmentReadCount > 0 {

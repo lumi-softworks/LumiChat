@@ -16,4 +16,10 @@ enum SendActionBarAccessibility {
 
     /// Provider 缺失时的错误按钮。点击后弹出缺失列表。
     static let errorButton = "lumi.conversation-input.action-bar.error"
+
+    /// 大内存本地模型确认弹窗的「仍要发送」按钮。
+    static let localModelConfirmButton = "lumi.conversation-input.local-model.confirm"
+
+    /// 大内存本地模型确认弹窗的「取消」按钮。
+    static let localModelCancelButton = "lumi.conversation-input.local-model.cancel"
 }
